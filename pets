@@ -1,0 +1,318 @@
+#include <LiquidCrystal.h>   
+#include <Servo.h>
+#include <IRremote.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#define POT A4
+#define BOMBA_LED 1
+#define BOTAO 6
+#define RECV_PIN 7
+#define toneServo A5
+
+int led = 0;
+
+int pin_temp = A3;
+int pin_servo = 3;
+int gelo_servido = 0;
+float temp_servido = 1;
+
+Servo servo_temp;
+
+IRrecv irrecv(RECV_PIN);
+decode_results results;
+
+long timer, start, inicial;
+    //inicial = tempo ao ligar o arduino
+    //Start = tempo ao iniciar o programa
+long time; //Inserida pelo usuário
+String timeString;
+String schedule[4];
+// valor de milis em relação ao tempo
+long dia = 86400000;
+long hora = 3600000; 
+long minuto = 60000; 
+long segundo =  1000; 
+
+int pos = 0;
+Servo servo_A2;
+bool locked = true;
+bool active = false;
+
+LiquidCrystal lcd(13,12,11,10, 9, 8); 
+
+void setup(){
+  servo_A2.attach(A2, 500, 2500);
+  lcd.begin(16,2); 
+  pinMode(toneServo,OUTPUT);
+  pinMode(POT, INPUT);
+
+  servo_A2.write(0);
+  inicial = millis();
+  
+  //Enable serial usage and IR signal in
+  Serial.begin(9600);
+  Serial.println("Enabling IRin");
+  irrecv.enableIRIn(); 
+  Serial.println("Enabled IRin");
+
+  //micro servo temp
+  servo_temp.attach(pin_servo);
+  Serial.begin(9600);
+  servo_temp.write(0);
+
+}
+
+ 
+
+void setTimer(){
+  start = millis();
+}
+
+  void open(){
+    lcd.clear();
+    lcd.setCursor(2,0);
+    lcd.print("Alimentando...");
+   
+    
+      for (pos = 0; pos <= 90; pos += 1) {
+          servo_A2.write(pos);//Open
+         delay(15);
+          }
+    locked = false;
+    lcd.clear();
+  }
+  void close(){
+    lcd.clear();
+      lcd.setCursor(4,0);
+      lcd.print("Complete...");
+    
+    digitalWrite(A1,HIGH);
+    digitalWrite(A0,LOW);
+    
+    for (pos = 90; pos >= 0; pos -= 1) {
+      servo_A2.write(pos);//Close
+      delay(15);
+    }
+        locked = true;
+  lcd.clear();
+  }
+
+  void serve_gelo() {
+     servo_temp.write(90);
+     delay(1000);
+     servo_temp.write(0); 
+  }
+
+  long dias, horas, minutos, segundos, milissegundos;
+  String stringHoras, stringMinutos, stringSegundos;
+  int aux = 0;
+
+  String milisParaHora(){
+    dias = timer / dia ;                              
+    horas = (timer % dia) / hora;                       
+    minutos = ((timer % dia) % hora) / minuto ;         
+    segundos = (((timer % dia) % hora) % minuto) / segundo;
+    stringHoras = String(horas);
+    stringMinutos = String(minutos);
+    stringSegundos = String(segundos);
+    
+    if(stringHoras.length() == 1){
+      stringHoras = "0";
+      stringHoras.concat(String(horas));
+    }
+    if(stringMinutos.length() == 1){
+      stringMinutos = "0";
+      stringMinutos.concat(String(minutos));
+    }
+    if(stringSegundos.length() == 1){
+      stringSegundos = "0";
+      stringSegundos.concat(String(segundos));
+    }
+
+    String milisHora = stringHoras;
+    milisHora.concat(":");
+    milisHora.concat(stringMinutos);
+    milisHora.concat(":");
+    milisHora.concat(stringSegundos);
+    if(segundos == 1 && aux == 0){
+    lcd.clear();
+      aux = 1;
+    }
+    if(aux == 1 && segundos != 1){
+      aux = 0;
+    }
+    return milisHora;
+  }
+
+
+ char buf[6];
+ 
+ String timeToChar(){ 
+  String Hora;
+   for (int i = 0; i < 6 ; i++){
+   	buf[i] = timeString.charAt(i);
+   }
+  Hora.concat(buf[0]);
+  Hora.concat(buf[1]);
+  Hora.concat(":");
+  Hora.concat(buf[2]);
+  Hora.concat(buf[3]);
+  Hora.concat(":");
+  Hora.concat(buf[4]);
+  Hora.concat(buf[5]);
+  return Hora;
+    }
+
+
+void concat(int y){
+  time = 10*time + y;
+}
+
+//LOOP
+void loop(){
+  
+   int nivel = analogRead (POT);
+  
+  if((nivel >=100) || (nivel <=500) )
+    digitalWrite(led, HIGH);
+  
+   
+  if ((nivel <= 400) && (nivel >= 1)) { // Se o nível do reservatório for <= a 400 "E" >= 1 o alarme mínimo aciona
+    tone(A5, 400);
+    tone(A5, 200);
+  }
+  else if (nivel >= 450) { // Se não o nível do reservatório for >= a 450 o alarme mínimo desliga
+    noTone(A5); 
+   
+  }
+
+  
+  timer = millis();
+  long t = start + time*1000;
+  if(irrecv.decode(&results)){
+        unsigned int value = results.value; //Get the value of results as an unsigned int, so we can use ////////switch case
+        Serial.println(value);
+        switch (value){
+        case 41055:
+           setTimer();
+            lcd.clear();
+            lcd.setCursor(7,1),lcd.print("Time set!");
+            delay(1000);
+            lcd.clear();
+            timeString = "";
+            active = true;
+            break;
+        case 2295: //1
+        	concat(1);
+            timeString.concat(1);
+            lcd.clear();
+        break;
+        case 34935://2
+            concat(2);
+            timeString.concat(2);
+            lcd.clear();
+        break;
+        case 18615://3
+            concat(3);
+            timeString.concat(3);
+            lcd.clear();
+        break;
+        case 10455://4
+            concat(4);
+            timeString.concat(4);
+            lcd.clear(); 
+        break;
+        case 43095://5
+            concat(5);
+            timeString.concat(5);
+            lcd.clear();   
+        break;
+        case 26775://6
+            concat(6);
+            timeString.concat(6);
+            lcd.clear(); 
+        break;
+        case 6375://7
+            concat(7);
+            timeString.concat(7);
+            lcd.clear();  
+        break;
+        case 39015://8
+            concat(8);
+            timeString.concat(8);
+            lcd.clear();   
+        break;
+        case 22695://9
+            concat(9);
+            timeString.concat(9);
+            lcd.clear(); 
+        break;
+        case 12495://0
+            concat(0);
+            timeString.concat(0);
+            lcd.clear();
+        break;
+      
+    }
+     irrecv.resume(); // Receive the next value
+  }
+  
+  if(timer > t && t > 0 && active == true){
+    open();
+    delay(1000);
+    close();
+    setTimer();
+  }
+  
+  for (int i = 0; i < 4; i++){
+    if(milisParaHora().equals(schedule[i]) == true){
+    	//servo_A2.write(90);
+     	//delay(1000);
+     	//servo_A2.write(0); 
+      	open();
+  		delay(1000);
+    	close();
+   		setTimer();
+    }
+  }
+  
+ 
+ if(locked == false){
+   lcd.clear();
+     lcd.setCursor(4,0),lcd.print("Feeding...");
+   
+ } else {
+   	lcd.setCursor(0,0);
+   	lcd.print(nivel);
+   	lcd.print(" ml");
+   	//lcd.scrollDisplayLeft();
+   	lcd.setCursor(9,1),lcd.print(timeString);
+   	lcd.setCursor(0,1),lcd.print(milisParaHora());
+   	digitalWrite(A1,HIGH);
+   	digitalWrite(A0,LOW);
+ }
+  
+  
+    int analog_value = analogRead(pin_temp);
+    float temp = (((analog_value*5.0)/1024.0)-0.5)*100;
+    Serial.print(temp);
+  Serial.println(gelo_servido);
+  if(temp >= 36)
+  {
+    if (gelo_servido == 0) {
+      servo_temp.write(90);
+      delay(1000);
+      servo_temp.write(0); 
+    gelo_servido = 1;
+    }
+  }
+  else {
+    servo_temp.write(0);
+    gelo_servido = 0;
+  }
+  delay(  50);
+
+}
+     
